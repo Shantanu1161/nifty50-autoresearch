@@ -1,0 +1,20 @@
+{
+  "strategy": "model2_nr_breakout",
+  "start": "2020-01-01",
+  "end": "2025-04-30",
+  "n_tickers": 47,
+  "n_trades": 748,
+  "accuracy_on_traded": 0.56951871657754,
+  "coverage": 0.36321962837892946,
+  "sharpe": -0.7808861708099456,
+  "max_drawdown": -0.6307571148066322,
+  "total_return": -0.4552619111801244,
+  "deflated_sharpe_prob": 0.0,
+  "vert_days": 2,
+  "k_up": 1.5,
+  "k_dn": 1.5,
+  "threshold": 0.65,
+  "n_splits": 8,
+  "k_test": 2,
+  "embargo_days": 5
+}
