@@ -28,6 +28,7 @@ from harness.cpcv import cpcv_splits
 from harness.metrics import sharpe, summarise, deflated_sharpe
 from harness.costs import apply_costs
 from harness.report import write_report
+from harness.portfolio import construct_portfolio
 from strategies import model1_camarilla, model2_nr_breakout, ml_predictor
 
 ROOT = Path(__file__).resolve().parent
@@ -101,26 +102,8 @@ def per_ticker_pipeline(df: pd.DataFrame, strategy_name: str, vert_days: int,
         "net": net,
         "split_sharpes": split_sharpes,
         "p_profit": res["p_profit"],
+        "exit_date": lab["exit_date"],
     }
-
-
-def aggregate(per_ticker: dict[str, dict], top_n_per_day: int = 5) -> pd.DataFrame:
-    """Equal-weight across active signals, capped at top_n_per_day by p_profit.
-    Returns a DataFrame indexed by date with columns [equity, ret, n_active]."""
-    rows = []
-    for sym, r in per_ticker.items():
-        if r is None:
-            continue
-        df = pd.DataFrame({"sym": sym, "sig": r["signal"], "net": r["net"], "p": r["p_profit"]})
-        df = df[df["sig"] != 0]
-        rows.append(df.reset_index().rename(columns={"index": "date", "t": "date"}))
-    if not rows:
-        return pd.DataFrame(columns=["date", "ret", "n_active"]).set_index("date")
-    big = pd.concat(rows, ignore_index=True)
-    big = big.sort_values(["date", "p"], ascending=[True, False])
-    big = big.groupby("date").head(top_n_per_day)
-    daily = big.groupby("date").agg(ret=("net", "mean"), n_active=("net", "size"))
-    return daily
 
 
 def main():
@@ -164,20 +147,7 @@ def main():
         all_split_sharpes.extend(r["split_sharpes"])
         print(f"[{sym}] n_trades={(r['signal']!=0).sum()} acc_proxy={(r['net']>0).mean():.3f}")
 
-    print(f"[aggregate] tickers used: {len(per_ticker)}")
-    daily = aggregate(per_ticker, top_n_per_day=args.top_n_per_day)
-    if daily.empty:
-        print("No signals produced. Try lowering threshold or different strategy.")
-        return
-
-    daily = daily.sort_index()
-    daily["equity"] = (1 + daily["ret"].fillna(0)).cumprod()
-
-    # portfolio summary
-    portf_sharpe = sharpe(daily["ret"])
-    portf_dd = ((daily["equity"] / daily["equity"].cummax()) - 1).min()
-
-    # accuracy on traded subset across all signals
+    # build flat trades record with entry/exit, for the portfolio aggregator
     all_y_true, all_y_pred = [], []
     trades_log = []
     for sym, r in per_ticker.items():
@@ -189,12 +159,26 @@ def main():
             all_y_pred.extend(sig[mask].astype(int).tolist())
         for t in sig[mask].index:
             trades_log.append({
-                "date": t, "symbol": sym, "side": int(sig.loc[t]),
+                "entry_date": t, "exit_date": r["exit_date"].loc[t] if t in r["exit_date"].index else t,
+                "symbol": sym, "side": int(sig.loc[t]),
                 "p_profit": float(r["p_profit"].loc[t]) if t in r["p_profit"].index else float("nan"),
                 "ret_gross": float(ret.loc[t]),
                 "ret_net": float(r["net"].loc[t]),
             })
     acc = float(np.mean(np.array(all_y_true) == np.array(all_y_pred))) if all_y_true else 0.0
+
+    trades_df = pd.DataFrame(trades_log)
+    print(f"[aggregate] tickers used: {len(per_ticker)}, raw trades: {len(trades_df)}")
+    daily = construct_portfolio(trades_df, max_entries_per_day=args.top_n_per_day)
+    if daily.empty:
+        print("No signals produced. Try lowering threshold or different strategy.")
+        return
+
+    daily = daily.sort_index()
+    daily["equity"] = (1 + daily["ret"].fillna(0)).cumprod()
+
+    portf_sharpe = sharpe(daily["ret"])
+    portf_dd = ((daily["equity"] / daily["equity"].cummax()) - 1).min()
 
     # deflated Sharpe (treats each per-ticker per-split as a trial)
     obs_sr = portf_sharpe

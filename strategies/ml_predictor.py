@@ -15,6 +15,7 @@ under CPCV. Improvements the agent may try:
 from __future__ import annotations
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
@@ -24,6 +25,7 @@ FEATURES = [
     "ret_lag1", "ret_lag2", "ret_lag5",
     "atr_pct", "vol_ratio", "range_pct20",
     "close_to_sma20", "close_to_sma50",
+    "ret_lag10", "vol_ratio_5d", "atr_ratio_5_20",
 ]
 
 
@@ -32,8 +34,11 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     f["ret_lag1"] = df["ret"].shift(1)
     f["ret_lag2"] = df["ret"].shift(2)
     f["ret_lag5"] = df["close"].pct_change(5).shift(1)
+    f["ret_lag10"] = df["close"].pct_change(10).shift(1)
     f["atr_pct"] = df["atr14"] / df["close"]
     f["vol_ratio"] = df["volume"] / df["vol20"]
+    f["vol_ratio_5d"] = df["volume"] / df["volume"].rolling(5).mean()
+    f["atr_ratio_5_20"] = df["atr14"] / df["atr14"].rolling(20).mean()
     f["range_pct20"] = df["range_pct20"]
     sma20 = df["close"].rolling(20).mean()
     sma50 = df["close"].rolling(50).mean()
@@ -42,11 +47,30 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     return f
 
 
+# Switch via MODEL_TYPE — agent may flip and rerun.
+MODEL_TYPE = "logistic"  # "logistic" or "gbm"
+
+
 def make_model() -> Pipeline:
-    return Pipeline([
-        ("scaler", StandardScaler()),
-        ("clf", LogisticRegression(max_iter=1000, C=1.0)),
-    ])
+    if MODEL_TYPE == "logistic":
+        return Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", LogisticRegression(max_iter=1000, C=1.0)),
+        ])
+    elif MODEL_TYPE == "gbm":
+        # HistGradientBoosting handles NaN natively — no scaler needed.
+        return Pipeline([
+            ("clf", HistGradientBoostingClassifier(
+                max_iter=200,
+                learning_rate=0.05,
+                max_depth=4,
+                min_samples_leaf=20,
+                l2_regularization=1.0,
+                random_state=0,
+            )),
+        ])
+    else:
+        raise ValueError(f"Unknown MODEL_TYPE: {MODEL_TYPE}")
 
 
 def fit_predict_cpcv(
