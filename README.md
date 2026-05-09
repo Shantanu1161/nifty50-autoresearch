@@ -21,12 +21,14 @@ since the initial baseline:
 
 ### Headline results (CPCV-validated, Nifty 50, 2020 → Apr 2025)
 
-| Run | Strategy | Model | Threshold | Trades | Accuracy | Sharpe | Max DD | Total Ret |
-|---|---|---|---|---|---|---|---|---|
-| v1 best accuracy | NR | Logistic (old agg) | 0.65 | 748 | **57.0%** | -0.78 | -63% | -46% |
-| v1 best Sharpe | Camarilla | Logistic (old agg) | 0.60 | 718 | 53.3% | +0.23 | -56% | +0.7% |
-| **v2 best risk-adjusted** | NR | GBM | 0.55 | 1,370 | 53.9% | **-0.17** | **-16%** | **-5%** |
-| v2 best accuracy | NR | Logistic (new agg) | 0.55 | 1,433 | 55.6% | -1.10 | -29% | -28% |
+| Run | Strategy | Model | Threshold | k | Trades | Accuracy | Sharpe | Max DD | Total Ret |
+|---|---|---|---|---|---|---|---|---|---|
+| v1 reference | NR | Logistic (old agg) | 0.65 | 1.5 | 748 | 57.0% | -0.78 | -63% | -46% |
+| v1 reference | Camarilla | Logistic (old agg) | 0.60 | 1.5 | 718 | 53.3% | +0.23 | -56% | +0.7% |
+| v2 step 1 | NR | GBM | 0.55 | 1.5 | 1,370 | 53.9% | -0.17 | -16% | -5% |
+| v2 step 2 | NR | Logistic | 0.55 | 1.5 | 1,433 | 55.6% | -1.10 | -29% | -28% |
+| **v2 step 3 (best risk-adjusted)** | NR | GBM | 0.55 | 2.0 | 1,389 | 54.3% | **-0.15** | **-16%** | **-4.9%** |
+| **v2 step 3 (best accuracy)** | NR | Logistic | 0.55 | 2.0 | 1,450 | **56.1%** | -0.95 | -27% | -25% |
 
 The v1 headlines (57%, +0.23) were partially aggregation artifacts — the old
 "dump on entry date" aggregator both overstated compounding *and* understated
@@ -38,7 +40,11 @@ to v2. The v2 numbers are the honest baseline going forward.
 - **57.0% accuracy was real**, but the equity curve under the v1 aggregator
   was misleading. The signal still has 5-7% edge over coin-flip on traded
   days under proper validation.
-- **-16% drawdown** is the first credible risk profile this project has produced.
+- **-16% drawdown + -4.9% total return over 5 years** is the first
+  credibly defensible risk profile this project has produced.
+- **Triple-barrier multiplier sweep** (k=1.0, 1.5, 2.0, 2.5) showed monotonic
+  improvement up to k=2.0; above that the labels collapse to fixed-horizon
+  and add no information. k=2.0 stacks cleanly with both logistic and GBM.
 - **60% directional accuracy target still unreached.** Next big lever is
   intraday TBT order-flow features (teammate's pipeline), not more model
   classes.

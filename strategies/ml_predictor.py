@@ -48,7 +48,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # Switch via MODEL_TYPE — agent may flip and rerun.
-MODEL_TYPE = "logistic"  # "logistic" or "gbm"
+MODEL_TYPE = "gbm"  # "logistic" or "gbm"
 
 
 def make_model() -> Pipeline:
