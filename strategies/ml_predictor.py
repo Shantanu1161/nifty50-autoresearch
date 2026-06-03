@@ -13,6 +13,7 @@ under CPCV. Improvements the agent may try:
   * try sample-weighting by vol or by recency
 """
 from __future__ import annotations
+import os
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -22,11 +23,34 @@ from sklearn.pipeline import Pipeline
 
 
 FEATURES = [
-    "ret_lag1", "ret_lag2", "ret_lag5",
-    "atr_pct", "vol_ratio", "range_pct20",
-    "close_to_sma20", "close_to_sma50",
-    "ret_lag10", "vol_ratio_5d", "atr_ratio_5_20",
+    "ret_lag1", "ret_lag2", "ret_lag5", "ret_lag10",
+    "atr_pct", "vol_ratio", "vol_ratio_5d", "atr_ratio_5_20",
+    "range_pct20", "close_to_sma20", "close_to_sma50",
+    "rsi14", "dist_to_nearest_pivot",
 ]
+
+
+def _rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    delta = close.diff()
+    up = delta.clip(lower=0).rolling(period).mean()
+    dn = (-delta.clip(upper=0)).rolling(period).mean()
+    rs = up / dn.replace(0, np.nan)
+    return 100 - (100 / (1 + rs))
+
+
+def _camarilla_levels(h: pd.Series, l: pd.Series, c: pd.Series) -> pd.DataFrame:
+    rng = h - l
+    out = pd.DataFrame(index=h.index)
+    out["P"] = (h + l + c) / 3
+    out["R4"] = c + rng * 1.1 / 2
+    out["R3"] = c + rng * 1.1 / 4
+    out["R2"] = c + rng * 1.1 / 6
+    out["R1"] = c + rng * 1.1 / 12
+    out["S1"] = c - rng * 1.1 / 12
+    out["S2"] = c - rng * 1.1 / 6
+    out["S3"] = c - rng * 1.1 / 4
+    out["S4"] = c - rng * 1.1 / 2
+    return out
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -44,11 +68,27 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     sma50 = df["close"].rolling(50).mean()
     f["close_to_sma20"] = df["close"] / sma20 - 1
     f["close_to_sma50"] = df["close"] / sma50 - 1
+    # RSI(14)
+    f["rsi14"] = _rsi(df["close"], 14)
+    # Distance to nearest Camarilla pivot (signed % of price; computed from
+    # yesterday's H/L/C so it's strictly causal)
+    cam = _camarilla_levels(df["high"].shift(1), df["low"].shift(1), df["close"].shift(1))
+    cam_arr = cam.to_numpy()
+    close_arr = df["close"].to_numpy().reshape(-1, 1)
+    dist = (cam_arr - close_arr) / close_arr  # positive = pivot above price
+    abs_dist = np.abs(dist)
+    nearest_signed = np.full(len(dist), np.nan)
+    valid_rows = ~np.all(np.isnan(abs_dist), axis=1)
+    if valid_rows.any():
+        idx_valid = np.where(valid_rows)[0]
+        nearest_idx = np.nanargmin(abs_dist[idx_valid], axis=1)
+        nearest_signed[idx_valid] = dist[idx_valid, nearest_idx]
+    f["dist_to_nearest_pivot"] = nearest_signed
     return f
 
 
-# Switch via MODEL_TYPE — agent may flip and rerun.
-MODEL_TYPE = "gbm"  # "logistic" or "gbm"
+# Switch via MODEL_TYPE env var (preferred) or by editing the default below.
+MODEL_TYPE = os.environ.get("MODEL_TYPE", "gbm")  # "logistic" or "gbm"
 
 
 def make_model() -> Pipeline:

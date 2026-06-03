@@ -1,0 +1,20 @@
+{
+  "strategy": "model1_camarilla",
+  "start": "2020-01-01",
+  "end": "2025-04-30",
+  "n_tickers": 46,
+  "n_trades": 1056,
+  "accuracy_on_traded": 0.5142045454545454,
+  "coverage": 0.7026215762084209,
+  "sharpe": -0.9115523949628417,
+  "max_drawdown": -0.3980247482754419,
+  "total_return": -0.2810829763063267,
+  "deflated_sharpe_prob": 0.0,
+  "vert_days": 2,
+  "k_up": 2.0,
+  "k_dn": 2.0,
+  "threshold": 0.55,
+  "n_splits": 8,
+  "k_test": 2,
+  "embargo_days": 5
+}
